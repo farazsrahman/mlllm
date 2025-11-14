@@ -1,0 +1,14 @@
+[project]
+name = "mnist-6v7-trainer"
+version = "0.1.0"
+description = "Simple MLP training script for MNIST 6 vs 7 (CPU-friendly)."
+readme = "README.md"
+requires-python = ">=3.9"
+
+dependencies = [
+    "torch",
+    "torchvision",
+]
+
+[project.scripts]
+mnist-6v7-train = "train:main"
