@@ -1,14 +1,10 @@
-# smart_runner.py
-import subprocess, shlex, json
-from openai import OpenAI
-from pathlib import Path
-
-client = OpenAI()
+import subprocess, shlex
 
 def run_safe_command(command: str):
-    """Run only python scripts inside the current directory."""
-    if not command.startswith("python "):
-        return {"error": "Unsafe command blocked!"}
+    """Executes only approved python mnist67/train.py commands."""
+    if not command.startswith("python mnist67/train.py"):
+        return {"error": f"Unsafe command blocked: {command}"}
+
     print(f"💻 Executing: {command}")
     process = subprocess.Popen(
         shlex.split(command),
@@ -18,18 +14,24 @@ def run_safe_command(command: str):
     out, err = process.communicate()
     return {"stdout": out.decode(), "stderr": err.decode()}
 
+
+# Function-calling schema for GPT
 tools = [
     {
         "type": "function",
         "function": {
             "name": "run_safe_command",
-            "description": "Execute an ML training script safely with specific command-line arguments.",
+            "description": "Execute a safe ML training command for the MNIST 6-vs-7 model.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "command": {
                         "type": "string",
-                        "description": "Full command to execute, e.g. 'python train.py --lr 0.001 --bsz 32'"
+                        "description": (
+                            "Full CLI command, e.g. "
+                            "'python mnist67/train.py --learning_rate 0.001 "
+                            "--batch_size 64 --model_width 128 --epochs 5'"
+                        )
                     }
                 },
                 "required": ["command"]
