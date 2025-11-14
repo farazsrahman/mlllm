@@ -5,27 +5,39 @@ import json
 
 client = OpenAI()
 
-user_prompt = """
-You are an ML experiment planner.
-Use python mnist67/train.py to train the MNIST 6-vs-7 model.
+# Path to any training script
+script_path = "mnist67/train.py"
 
-You can vary the following hyperparameters:
---learning_rate, --batch_size, --model_width, --model_depth, --dataset_size, and --epochs.
+# 1️⃣ Read the training script
+with open(script_path, "r") as f:
+    train_code = f.read()
 
-Run a few experiments (2–3 commands) to see which configuration gives the best accuracy.
+# 2️⃣ System prompt: tell GPT what to do
+system_prompt = f"""
+You are an ML experiment orchestrator.
+
+You will be given the full code of a Python training script. 
+Your job is to:
+1. Inspect its argument parser (e.g., argparse or click) to identify valid hyperparameters and their defaults.
+2. Generate 2–3 training commands that vary these hyperparameters to explore model performance.
+3. Each command must start with: python {script_path}
+4. Call the `run_safe_command` function to run each command.
+
+After all runs, you will summarize the results.
 """
 
-# Step 1: Ask GPT to propose and run experiments
+user_prompt = f"""
+Here is the code of the training script:
+{train_code}
+
+Analyze it and call run_safe_command with 2–3 valid CLI commands using the hyperparameters it defines.
+"""
+
+# 3️⃣ Ask GPT to plan and run experiments
 plan = client.chat.completions.create(
     model="gpt-5",
     messages=[
-        {
-            "role": "system",
-            "content": (
-                "You can run experiments by calling run_safe_command with different CLI arguments. "
-                "Only use 'python mnist67/train.py' followed by valid hyperparameters."
-            ),
-        },
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ],
     tools=tools,
@@ -40,17 +52,18 @@ for choice in plan.choices:
             result = run_safe_command(**args)
             results.append(result)
 
-# Step 2: Summarize
+# 4️⃣ Summarize results
 summary = client.chat.completions.create(
     model="gpt-5",
     messages=[
-        {"role": "system", "content": "Summarize the results of all training runs and highlight the best configuration."},
+        {"role": "system", "content": "Summarize all experiment results and highlight best hyperparameters."},
         {"role": "user", "content": json.dumps(results)},
     ],
 )
 
-print("\n📊 Training Results:\n")
+print("\n📊 Training Results:")
 for r in results:
     print(r["stdout"])
 
-print("\n🧠 Summary:\n", summary.choices[0].message.content)
+print("\n🧠 Summary:")
+print(summary.choices[0].message.content)

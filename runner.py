@@ -1,8 +1,9 @@
 import subprocess, shlex
 
+
 def run_safe_command(command: str):
-    """Executes only approved python mnist67/train.py commands."""
-    if not command.startswith("python mnist67/train.py"):
+    """Executes only 'python <something>/train.py' commands."""
+    if not command.startswith("python ") or "train.py" not in command:
         return {"error": f"Unsafe command blocked: {command}"}
 
     print(f"💻 Executing: {command}")
@@ -15,27 +16,24 @@ def run_safe_command(command: str):
     return {"stdout": out.decode(), "stderr": err.decode()}
 
 
-# Function-calling schema for GPT
 tools = [
     {
         "type": "function",
         "function": {
             "name": "run_safe_command",
-            "description": "Execute a safe ML training command for the MNIST 6-vs-7 model.",
+            "description": "Execute a safe training command for any ML model script.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "command": {
                         "type": "string",
                         "description": (
-                            "Full CLI command, e.g. "
-                            "'python mnist67/train.py --learning_rate 0.001 "
-                            "--batch_size 64 --model_width 128 --epochs 5'"
+                            "The CLI command, e.g. 'python mnist67/train.py --lr 0.001 --batch_size 64'"
                         )
                     }
                 },
-                "required": ["command"]
-            }
-        }
+                "required": ["command"],
+            },
+        },
     }
 ]
