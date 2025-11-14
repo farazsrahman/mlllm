@@ -3,21 +3,11 @@ import subprocess
 import shlex
 
 def run_safe_command(command: str):
-    """Execute python train.py commands, print command + raw output, and return them."""
+    """Executes python train.py safely and returns raw stdout+stderr."""
 
-    # SAFETY CHECK
     if not command.startswith("python ") or "train.py" not in command:
-        error_msg = f"Blocked unsafe command: {command}"
-        print(error_msg)
-        return {"stdout": "", "stderr": error_msg}
-
-    # PRINT COMMAND BEING RUN
-    print("\n============================")
-    print("RUNNING COMMAND:")
+        return {"stdout": "", "stderr": f"Blocked unsafe command: {command}"}
     print(command)
-    print("============================")
-
-    # EXECUTE THE COMMAND
     process = subprocess.Popen(
         shlex.split(command),
         stdout=subprocess.PIPE,
@@ -25,30 +15,20 @@ def run_safe_command(command: str):
     )
 
     out, err = process.communicate()
-
-    stdout = out.decode()
-    stderr = err.decode()
-
-    # PRINT RAW OUTPUT
-    print("----- STDOUT -----")
-    print(stdout)
-    print("----- STDERR -----")
-    print(stderr)
-    print("============================\n")
-
+    print(out)
+    print(err)
     return {
-        "stdout": stdout,
-        "stderr": stderr
+        "stdout": out.decode(),
+        "stderr": err.decode()
     }
 
 
-# Tool schema for GPT
 tools = [
     {
         "type": "function",
         "function": {
             "name": "run_safe_command",
-            "description": "Run a python train.py command and return raw stdout/stderr.",
+            "description": "Run python train.py and return raw output.",
             "parameters": {
                 "type": "object",
                 "properties": {

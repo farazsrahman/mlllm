@@ -1,3 +1,4 @@
+# main.py
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from openai import OpenAI
@@ -6,100 +7,143 @@ import json
 from runner import run_safe_command, tools
 
 client = OpenAI()
-
+app = FastAPI()
 
 SCRIPT_PATH = "mnist67/train.py"
-user_prompt = "Can you generate a scaling law for my MNIST MLP by training on fractions of my dataset? Specifically train models on 10%, 20%, 30%, … to 100% of my data. I want 10 models trained at each data level. Then collect the information and generate for me a plot of the scaling law "
 
-# load script code
-with open(SCRIPT_PATH, "r") as f:
-    train_code = f.read()
 
-system_prompt = f"""
-You are an ML experiment orchestrator.
+# ============================================
+#               STAGE 1 PROMPT
+# ============================================
+system_prompt_stage1 = f"""
+You are an ML experiment planner.
 
-Your responsibilities:
-1. Read the Python training script code.
+Your tasks:
+1. Read the provided Python training script.
 2. Infer valid hyperparameters from argparse/click.
-3. Generate valid commands that start with:
-  python {SCRIPT_PATH}
-4. For each command, call run_safe_command.
-5. You will be given RAW OUTPUT (stdout, stderr) from the script.
-6. Using ONLY the raw output + the command, produce a clean JSON object:
+3. Generate N commands (default: 3) as specified by the user's prompt.
+4. Each command MUST begin with:
+python {SCRIPT_PATH}
+5. For each command, call the function run_safe_command with:
+{{ "command": "..." }}
 
-{{
-"experiments": [
-{{
-  "command": "...",
-  "hyperparameters": {{}},
-  "accuracy": ...,
-  "stdout": "...",
-  "stderr": "..."
-}}
-],
-"summary": "..."
-}}
-
-Rules:
-- Extract hyperparameters by parsing the --flags inside each command.
-- Extract accuracy by reading the raw logs (look for 'acc:' or similar).
-- Return numeric values as numbers, not strings.
-- Do not output anything except JSON.
+CRITICAL RULES:
+- Output ONLY tool_calls.
+- Do NOT summarize.
+- Do NOT produce JSON.
+- Do NOT write explanations.
+- ONLY produce tool calls to run_safe_command.
 """
 
-# Prompt to GPT (ask for commands)
-plan_prompt = f"""
+
+# ============================================
+#               STAGE 2 PROMPT
+# ============================================
+system_prompt_stage2 = """
+You are an ML experiment analyzer.
+
+You will receive raw experiment results including:
+- command
+- stdout
+- stderr
+
+Your tasks:
+1. Parse hyperparameters by reading --flags from each command.
+2. Extract accuracy values from stdout (look for patterns like "acc:" or "accuracy").
+3. Produce a STRICT JSON OBJECT in the exact format below:
+
+{
+  "experiments": [
+    {
+      "run_id": unique number,
+      "command": "...",
+      "hyperparameters": {},
+      "accuracy": ...,
+      "stdout": "...",
+      "stderr": "..."
+    }
+  ],
+  "summary": "...",
+  "raw_output": "..."
+}
+
+Rules:
+- NO extra text.
+- Only valid JSON.
+- Hyperparameters must be numbers when possible.
+- accuracy must be numeric.
+"""
+
+
+# ============================================
+#                FASTAPI ENDPOINT
+# ============================================
+@app.post("/run_experiments")
+async def run_experiments(request: Request):
+    body = await request.json()
+    user_prompt = body.get("prompt", "")
+
+    # 1. Load train.py
+    with open(SCRIPT_PATH, "r") as f:
+        train_code = f.read()
+
+    # 2. Build Stage 1 user prompt
+    stage1_user_prompt = f"""
 Training script:
 {train_code}
+
+User request:
 {user_prompt}
 """
 
-# STEP 1 — GPT generates tool calls (commands)
-plan = client.chat.completions.create(
-    model="gpt-5",
-    messages=[
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": plan_prompt},
-    ],
-    tools=tools  # enables run_safe_command
-)
+    # ===========================
+    #       STAGE 1 → PLAN
+    # ===========================
+    plan = client.chat.completions.create(
+        model="gpt-5",
+        messages=[
+            {"role": "system", "content": system_prompt_stage1},
+            {"role": "user", "content": stage1_user_prompt},
+        ],
+        tools=tools,
+    )
 
-# STEP 2 — Execute commands and collect raw output
-raw_results = []
+    # ===========================
+    #       EXECUTE COMMANDS
+    # ===========================
+    raw_results = []
 
-for choice in plan.choices:
-    msg = choice.message
-    if hasattr(msg, "tool_calls") and msg.tool_calls:
-        for tc in msg.tool_calls:
-            args = json.loads(tc.function.arguments)
-            cmd = args["command"]
+    for choice in plan.choices:
+        msg = choice.message
+        if hasattr(msg, "tool_calls") and msg.tool_calls:
+            for tc in msg.tool_calls:
+                args = json.loads(tc.function.arguments)
+                cmd = args["command"]
 
-            # run real training script
-            res = run_safe_command(cmd)
+                # Run the actual training command
+                out = run_safe_command(cmd)
 
-            raw_results.append({
-                "command": cmd,
-                "stdout": res["stdout"],
-                "stderr": res["stderr"]
-            })
+                raw_results.append({
+                    "command": cmd,
+                    "stdout": out["stdout"],
+                    "stderr": out["stderr"]
+                })
 
-# STEP 3 — Let GPT structure + summarize (using RAW data only)
-summarize_prompt = json.dumps(raw_results, indent=2)
+    # Save raw JSON for Stage 2
+    raw_output_string = json.dumps(raw_results, indent=2)
 
-summary = client.chat.completions.create(
-    model="gpt-5",
-    response_format={"type": "json_object"},
-    messages=[
-        {
-            "role": "system",
-            "content": "You analyze experiment results and output strict JSON only."
-        },
-        {
-            "role": "user",
-            "content": summarize_prompt
-        }
-    ]
-)
+    # ===========================
+    #       STAGE 2 → STRUCTURE
+    # ===========================
+    structured = client.chat.completions.create(
+        model="gpt-5",
+        response_format={"type": "json_object"},   # STRICT JSON
+        messages=[
+            {"role": "system", "content": system_prompt_stage2},
+            {"role": "user", "content": raw_output_string},
+        ]
+    )
 
-final = json.loads(summary.choices[0].message.content)
-print(final)
+    final_json = json.loads(structured.choices[0].message.content)
+
+    return JSONResponse(content=final_json)
