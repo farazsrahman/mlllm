@@ -1,36 +1,58 @@
-import subprocess, shlex
-
+# runner.py
+import subprocess
+import shlex
 
 def run_safe_command(command: str):
-    """Executes only 'python <something>/train.py' commands."""
-    if not command.startswith("python ") or "train.py" not in command:
-        return {"error": f"Unsafe command blocked: {command}"}
+    """Execute python train.py commands, print command + raw output, and return them."""
 
-    print(f"💻 Executing: {command}")
+    # SAFETY CHECK
+    if not command.startswith("python ") or "train.py" not in command:
+        error_msg = f"Blocked unsafe command: {command}"
+        print(error_msg)
+        return {"stdout": "", "stderr": error_msg}
+
+    # PRINT COMMAND BEING RUN
+    print("\n============================")
+    print("RUNNING COMMAND:")
+    print(command)
+    print("============================")
+
+    # EXECUTE THE COMMAND
     process = subprocess.Popen(
         shlex.split(command),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+
     out, err = process.communicate()
-    return {"stdout": out.decode(), "stderr": err.decode()}
+
+    stdout = out.decode()
+    stderr = err.decode()
+
+    # PRINT RAW OUTPUT
+    print("----- STDOUT -----")
+    print(stdout)
+    print("----- STDERR -----")
+    print(stderr)
+    print("============================\n")
+
+    return {
+        "stdout": stdout,
+        "stderr": stderr
+    }
 
 
+# Tool schema for GPT
 tools = [
     {
         "type": "function",
         "function": {
             "name": "run_safe_command",
-            "description": "Execute a safe training command for any ML model script.",
+            "description": "Run a python train.py command and return raw stdout/stderr.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "command": {
-                        "type": "string",
-                        "description": (
-                            "The CLI command, e.g. 'python mnist67/train.py --lr 0.001 --batch_size 64'"
-                        )
-                    }
+                    "command": {"type": "string"}
                 },
                 "required": ["command"],
             },
