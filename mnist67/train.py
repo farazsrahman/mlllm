@@ -98,7 +98,7 @@ def train(args, seed=None):
         val_loss, val_acc = evaluate(model, val_loader, criterion, device)
     
     # Print only the final validation loss
-    print(f"{val_loss:.4f}")
+    print(f"Final Validation Loss: {val_loss:.4f}")
     
     return {
         "train_loss": total_loss / total,
