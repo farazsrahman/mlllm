@@ -51,18 +51,15 @@ export default function Home() {
     setIsProcessing(true);
     
     try {
-      // Call backend API - backend will process message, generate configs, and execute runs immediately
+      // Call backend API - backend will process message and generate configs
       const assistantMessage = await sendChatMessage(content);
       
       setMessages((prev) => [...prev, assistantMessage]);
       
-      // Refresh runs list since backend executed runs immediately
-      queryClient.invalidateQueries({ queryKey: ["/api/runs"] });
-      
-      toast({
-        title: "Runs executed",
-        description: `Successfully processed your request and executed ${assistantMessage.runConfigs?.length || 0} training runs.`,
-      });
+      // Automatically create runs if runConfigs are present
+      if (assistantMessage.runConfigs && assistantMessage.runConfigs.length > 0) {
+        createRunsMutation.mutate(assistantMessage.runConfigs);
+      }
     } catch (error) {
       const errorContent = error instanceof Error ? error.message : "Sorry, I encountered an error processing your request. Please try again.";
       const errorMessage: ChatMessage = {
@@ -94,19 +91,6 @@ export default function Home() {
     // setMessages((prev) => [...prev, assistantMessage]);
   };
   
-  const handleAcceptConfigs = (configs: RunConfig[]) => {
-    createRunsMutation.mutate(configs);
-    
-    const confirmMessage: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      role: "system",
-      content: `Starting ${configs.length} training runs...`,
-      timestamp: new Date().toISOString(),
-    };
-    
-    setMessages((prev) => [...prev, confirmMessage]);
-  };
-  
   return (
     <div className="h-screen flex flex-col bg-background">
       <header className="border-b border-border bg-card px-6 py-4">
@@ -130,7 +114,6 @@ export default function Home() {
             <div className="flex-1 overflow-hidden flex flex-col">
               <ChatWindow
                 messages={messages}
-                onRunConfigsAccept={handleAcceptConfigs}
                 isProcessing={isProcessing}
               />
               <ChatInput
@@ -142,7 +125,12 @@ export default function Home() {
           
           <div className="lg:w-[60%] p-6 overflow-auto">
             <div className="mb-6">
-              <h2 className="text-lg font-semibold mb-1">Training Runs</h2>
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="text-lg font-semibold">Training Runs</h2>
+                <div className="text-2xl font-bold text-primary" data-testid="text-run-count">
+                  {runs.length}
+                </div>
+              </div>
               <p className="text-sm text-muted-foreground">
                 View and manage your experiment runs
               </p>

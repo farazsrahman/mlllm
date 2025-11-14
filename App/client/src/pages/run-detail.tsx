@@ -1,14 +1,15 @@
 import { useParams, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { getRun, getPlot } from "@/lib/api";
+import { getRun, getPlot, getRunImage } from "@/lib/api";
 import { PlotViewer } from "@/components/PlotViewer";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Activity, CheckCircle2, Clock, XCircle } from "lucide-react";
+import { ArrowLeft, Activity, CheckCircle2, Clock, XCircle, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useState, useEffect } from "react";
 
 const statusConfig = {
   pending: {
@@ -52,6 +53,21 @@ export default function RunDetail() {
     queryFn: () => getPlot(runId),
     enabled: !!runId,
   });
+  
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(true);
+  
+  useEffect(() => {
+    if (runId) {
+      setImageLoading(true);
+      getRunImage(runId).then((url) => {
+        setImageUrl(url);
+        setImageLoading(false);
+      }).catch(() => {
+        setImageLoading(false);
+      });
+    }
+  }, [runId]);
   
   if (!runId) {
     return (
@@ -160,6 +176,33 @@ export default function RunDetail() {
             <p className="text-muted-foreground">Run not found</p>
           </Card>
         )}
+        
+        <div>
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <ImageIcon className="w-5 h-5" />
+            Output Image
+          </h3>
+          <Card className="p-6">
+            {imageLoading ? (
+              <div className="flex items-center justify-center h-[400px]">
+                <Skeleton className="w-full h-[400px]" />
+              </div>
+            ) : imageUrl ? (
+              <div className="rounded-md overflow-hidden border border-border bg-secondary/20">
+                <img 
+                  src={imageUrl} 
+                  alt={`Output for ${runId}`}
+                  className="w-full max-h-[600px] object-contain"
+                  onError={() => setImageUrl(null)}
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-[400px] text-muted-foreground">
+                No image available for this run
+              </div>
+            )}
+          </Card>
+        </div>
         
         <div>
           <h3 className="text-lg font-semibold mb-4">Training Progress</h3>

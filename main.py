@@ -3,79 +3,103 @@ from fastapi.responses import JSONResponse
 from openai import OpenAI
 import json
 
+from runner import run_safe_command, tools
+
 client = OpenAI()
-app = FastAPI()
 
-SCRIPT_PATH = "mnist67/train.py"  # Path to your ML script
 
-@app.post("/run_experiments")
-async def run_experiments(request: Request):
-    data = await request.json()
-    user_prompt = data.get("prompt", "").strip()
+SCRIPT_PATH = "mnist67/train.py"
+user_prompt = "Can you generate a scaling law for my MNIST MLP by training on fractions of my dataset? Specifically train models on 10%, 20%, 30%, … to 100% of my data. I want 10 models trained at each data level. Then collect the information and generate for me a plot of the scaling law "
 
-    # 1️⃣ Read the training script
-    with open(SCRIPT_PATH, "r") as f:
-        train_code = f.read()
+# load script code
+with open(SCRIPT_PATH, "r") as f:
+    train_code = f.read()
 
-    # 2️⃣ System prompt with clear structure
-    system_prompt = f"""
+system_prompt = f"""
 You are an ML experiment orchestrator.
 
-You will be given the code for a Python training script.
+Your responsibilities:
+1. Read the Python training script code.
+2. Infer valid hyperparameters from argparse/click.
+3. Generate valid commands that start with:
+  python {SCRIPT_PATH}
+4. For each command, call run_safe_command.
+5. You will be given RAW OUTPUT (stdout, stderr) from the script.
+6. Using ONLY the raw output + the command, produce a clean JSON object:
 
-Tasks:
-1. Inspect the code and read its argument parser (argparse or click) to discover valid hyperparameters and their defaults.
-2. Generate a number of valid training commands specified by the user (default: 3) that start with:
-   python {SCRIPT_PATH}
-3. For each command, output:
-   - "command": full CLI command used
-   - "hyperparameters": dictionary of parameter names and values
-   - "accuracy": numeric accuracy (simulate a realistic float)
-4. Finally include a "summary" describing which configuration performed best and why.
-
-⚙️ Respond ONLY with a JSON object in this exact structure:
 {{
-  "experiments": [
-    {{
-      "command": "python path/to/train.py --learning_rate 0.001 --batch_size 64 --epochs 5",
-      "hyperparameters": {{
-        "learning_rate": 0.001,
-        "batch_size": 64,
-        "epochs": 5,
-        "model_width": 128,
-        "model_depth": 3
-      }},
-      "accuracy": 0.942
-    }}
-  ],
-  "summary": "The best configuration achieved 94.2% accuracy with learning_rate=0.001, batch_size=64, and model_width=128."
+"experiments": [
+{{
+  "command": "...",
+  "hyperparameters": {{}},
+  "accuracy": ...,
+  "stdout": "...",
+  "stderr": "..."
+}}
+],
+"summary": "..."
 }}
 
-Notes:
-- The specific keys inside "hyperparameters" vary by script, but the outer JSON structure must stay consistent.
-- All numeric values must be numbers, not strings.
-- Accuracy must be a realistic float or percentage.
-- Do not include any explanation outside the JSON.
+Rules:
+- Extract hyperparameters by parsing the --flags inside each command.
+- Extract accuracy by reading the raw logs (look for 'acc:' or similar).
+- Return numeric values as numbers, not strings.
+- Do not output anything except JSON.
 """
 
-    # 3️⃣ Merge script and user instruction
-    final_user_prompt = f"""
-Here is the training script code:
+# Prompt to GPT (ask for commands)
+plan_prompt = f"""
+Training script:
 {train_code}
-
 {user_prompt}
 """
 
-    # 4️⃣ Ask GPT for structured JSON output
-    response = client.chat.completions.create(
-        model="gpt-5",
-        response_format={"type": "json_object"},  # Force JSON output
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": final_user_prompt},
-        ],
-    )
+# STEP 1 — GPT generates tool calls (commands)
+plan = client.chat.completions.create(
+    model="gpt-5",
+    messages=[
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": plan_prompt},
+    ],
+    tools=tools  # enables run_safe_command
+)
 
-    # 5️⃣ Parse and return JSON response
-    final_output = json.loads(response.choices[0].message.content)
-    return JSONResponse(content=final_output)
+# STEP 2 — Execute commands and collect raw output
+raw_results = []
+
+for choice in plan.choices:
+    msg = choice.message
+    if hasattr(msg, "tool_calls") and msg.tool_calls:
+        for tc in msg.tool_calls:
+            args = json.loads(tc.function.arguments)
+            cmd = args["command"]
+
+            # run real training script
+            res = run_safe_command(cmd)
+
+            raw_results.append({
+                "command": cmd,
+                "stdout": res["stdout"],
+                "stderr": res["stderr"]
+            })
+
+# STEP 3 — Let GPT structure + summarize (using RAW data only)
+summarize_prompt = json.dumps(raw_results, indent=2)
+
+summary = client.chat.completions.create(
+    model="gpt-5",
+    response_format={"type": "json_object"},
+    messages=[
+        {
+            "role": "system",
+            "content": "You analyze experiment results and output strict JSON only."
+        },
+        {
+            "role": "user",
+            "content": summarize_prompt
+        }
+    ]
+)
+
+final = json.loads(summary.choices[0].message.content)
+print(final)

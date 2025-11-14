@@ -1,15 +1,12 @@
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@shared/schema";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Sparkles, User } from "lucide-react";
 
 interface ChatBubbleProps {
   message: ChatMessage;
-  onRunConfigsAccept?: (configs: any[]) => void;
 }
 
-export function ChatBubble({ message, onRunConfigsAccept }: ChatBubbleProps) {
+export function ChatBubble({ message }: ChatBubbleProps) {
   const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
   
@@ -41,7 +38,7 @@ export function ChatBubble({ message, onRunConfigsAccept }: ChatBubbleProps) {
         
         {message.runConfigs && message.runConfigs.length > 0 && (
           <div className="mt-3 space-y-2">
-            <p className="text-xs text-muted-foreground">Proposed configurations:</p>
+            <p className="text-xs text-muted-foreground">Created {message.runConfigs.length} training run{message.runConfigs.length !== 1 ? 's' : ''}</p>
             <div className="space-y-2">
               {message.runConfigs.map((config, idx) => (
                 <div
@@ -49,18 +46,16 @@ export function ChatBubble({ message, onRunConfigsAccept }: ChatBubbleProps) {
                   className="bg-secondary/50 rounded p-2 text-xs font-mono"
                   data-testid={`config-${idx}`}
                 >
-                  lr: {config.lr} | epochs: {config.epochs} | batch: {config.batch_size}
+                  {Object.entries(config)
+                    .map(([key, value]) => {
+                      // Format key names nicely
+                      const displayKey = key === 'lr' ? 'lr' : key === 'learning_rate' ? 'lr' : key;
+                      return `${displayKey}: ${typeof value === 'number' ? value.toFixed(4) : value}`;
+                    })
+                    .join(' | ')}
                 </div>
               ))}
             </div>
-            <Button
-              size="sm"
-              className="w-full mt-2"
-              onClick={() => onRunConfigsAccept?.(message.runConfigs!)}
-              data-testid="button-accept-configs"
-            >
-              Start These Runs
-            </Button>
           </div>
         )}
         

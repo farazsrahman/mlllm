@@ -1,6 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { existsSync, readdirSync } from "fs";
+import { join, extname, resolve } from "path";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/runs", async (_req, res) => {
@@ -77,6 +79,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/messages", async (_req, res) => {
     const messages = await storage.getMessages();
     res.json(messages);
+  });
+
+  // Serve images from outputs directory
+  // For now: Show IMG_9817.jpeg for all runs
+  // Later: Images should be named with run ID prefix: {runId}-*.png
+  app.get("/api/run/:id/image", async (req, res) => {
+    try {
+      const runId = req.params.id;
+      // Path to outputs directory: App/backend/outputs
+      // process.cwd() should be App directory when server runs
+      const outputsDir = resolve(process.cwd(), "backend", "outputs");
+      
+      // Check if outputs directory exists
+      if (!existsSync(outputsDir)) {
+        console.error(`Outputs directory not found at: ${outputsDir} (cwd: ${process.cwd()})`);
+        return res.status(404).json({ error: "Outputs directory not found", path: outputsDir });
+      }
+
+      // For now: Always serve IMG_9817.jpeg for all runs
+      const imageFile = "IMG_9817.jpeg";
+      const imagePath = resolve(join(outputsDir, imageFile));
+      
+      console.log(`Looking for image at: ${imagePath}`);
+      console.log(`File exists: ${existsSync(imagePath)}`);
+
+      if (!existsSync(imagePath)) {
+        // Fallback: Try to find any image with run ID prefix
+        const files = readdirSync(outputsDir);
+        const foundImage = files.find(
+          (file) => file.startsWith(runId) && [".png", ".jpg", ".jpeg", ".gif", ".webp"].includes(extname(file).toLowerCase())
+        );
+        
+        if (!foundImage) {
+          console.error(`Image not found. Looking for: ${imagePath}`);
+          console.error(`Files in outputs dir:`, files);
+          return res.status(404).json({ error: "Image not found for this run", path: imagePath, files });
+        }
+        
+        const fallbackPath = resolve(join(outputsDir, foundImage));
+        return res.sendFile(fallbackPath);
+      }
+
+      // Send file with absolute path (Express sendFile handles absolute paths)
+      res.sendFile(imagePath);
+    } catch (error) {
+      console.error("Error serving image:", error);
+      res.status(500).json({ error: "Failed to serve image", details: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  // Get list of available images for a run
+  app.get("/api/run/:id/images", async (req, res) => {
+    try {
+      const runId = req.params.id;
+      // Path to outputs directory: App/backend/outputs
+      const outputsDir = resolve(join(process.cwd(), "backend", "outputs"));
+      
+      if (!existsSync(outputsDir)) {
+        return res.json([]);
+      }
+
+      const files = readdirSync(outputsDir);
+      const imageFiles = files
+        .filter((file) => 
+          file.startsWith(runId) && 
+          [".png", ".jpg", ".jpeg", ".gif", ".webp"].includes(extname(file).toLowerCase())
+        )
+        .map((file) => ({
+          filename: file,
+          url: `/api/run/${runId}/image`,
+        }));
+
+      res.json(imageFiles);
+    } catch (error) {
+      console.error("Error listing images:", error);
+      res.status(500).json({ error: "Failed to list images" });
+    }
   });
 
   const httpServer = createServer(app);
