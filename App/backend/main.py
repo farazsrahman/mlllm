@@ -31,8 +31,51 @@ Backend Implementation Steps:
 This file is intentionally left incomplete for backend teammates to implement.
 """
 
-# TODO: Implement FastAPI application
-# TODO: Add CORS middleware for frontend communication
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from datetime import datetime
+import time
+
+# Initialize FastAPI app
+app = FastAPI(title="Trex Backend API")
+
+# Add CORS middleware for frontend communication
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:5000", "http://localhost:5000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+async def root():
+    """Health check endpoint"""
+    return {"status": "ok", "message": "Trex backend is running"}
+
+class RunExperimentsRequest(BaseModel):
+    prompt: str
+
+@app.post("/run_experiments")
+async def run_experiments(request: RunExperimentsRequest):
+    """
+    Run experiments based on a natural language prompt.
+    
+    Request body: { "prompt": "Try 5 different learning rates between 1e-4 and 1e-2." }
+    """
+    # TODO: Implement LLM agent to parse prompt and generate configs
+    # TODO: Execute runs using runner module
+    # TODO: Return ChatMessage format response
+    
+    return {
+        "id": f"msg-{int(time.time() * 1000)}",
+        "role": "assistant",
+        "content": f"Received prompt: {request.prompt}. (Backend implementation pending)",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "runConfigs": []
+    }
+
 # TODO: Set up WebSocket manager for log streaming
 # TODO: Import service modules (runner, analyzer, llm_agent, plotting, storage)
 # TODO: Implement all API endpoints listed above

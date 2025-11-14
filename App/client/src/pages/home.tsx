@@ -4,8 +4,8 @@ import { ChatWindow } from "@/components/ChatWindow";
 import { ChatInput } from "@/components/ChatInput";
 import { RunsGrid } from "@/components/RunsGrid";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { getRuns, createRuns } from "@/lib/api";
-import { proposeRunsFromUserMessage } from "@/lib/llm";
+import { getRuns, createRuns, sendChatMessage } from "@/lib/api";
+// import { proposeRunsFromUserMessage } from "@/lib/llm"; // Kept for future implementation
 import type { ChatMessage, RunConfig } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
@@ -13,6 +13,7 @@ import { Beaker } from "lucide-react";
 
 export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
   
   const { data: runs = [], isLoading: runsLoading } = useQuery({
@@ -47,18 +48,49 @@ export default function Home() {
     };
     
     setMessages((prev) => [...prev, userMessage]);
+    setIsProcessing(true);
     
-    const configs = await proposeRunsFromUserMessage(content);
+    try {
+      // Call backend API - backend will process message, generate configs, and execute runs immediately
+      const assistantMessage = await sendChatMessage(content);
+      
+      setMessages((prev) => [...prev, assistantMessage]);
+      
+      // Refresh runs list since backend executed runs immediately
+      queryClient.invalidateQueries({ queryKey: ["/api/runs"] });
+      
+      toast({
+        title: "Runs executed",
+        description: `Successfully processed your request and executed ${assistantMessage.runConfigs?.length || 0} training runs.`,
+      });
+    } catch (error) {
+      const errorMessage: ChatMessage = {
+        id: `msg-${Date.now() + 1}`,
+        role: "assistant",
+        content: "Sorry, I encountered an error processing your request. Please try again.",
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      
+      toast({
+        title: "Error",
+        description: "Failed to process your message. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
     
-    const assistantMessage: ChatMessage = {
-      id: `msg-${Date.now() + 1}`,
-      role: "assistant",
-      content: `I've analyzed your request and proposed ${configs.length} configurations. Would you like to start these runs?`,
-      timestamp: new Date().toISOString(),
-      runConfigs: configs,
-    };
-    
-    setMessages((prev) => [...prev, assistantMessage]);
+    // FUTURE IMPLEMENTATION: For back-and-forth approval flow, use this code instead:
+    // const configs = await proposeRunsFromUserMessage(content);
+    // const assistantMessage: ChatMessage = {
+    //   id: `msg-${Date.now() + 1}`,
+    //   role: "assistant",
+    //   content: `I've analyzed your request and proposed ${configs.length} configurations. Would you like to start these runs?`,
+    //   timestamp: new Date().toISOString(),
+    //   runConfigs: configs,
+    // };
+    // setMessages((prev) => [...prev, assistantMessage]);
   };
   
   const handleAcceptConfigs = (configs: RunConfig[]) => {
@@ -98,10 +130,11 @@ export default function Home() {
               <ChatWindow
                 messages={messages}
                 onRunConfigsAccept={handleAcceptConfigs}
+                isProcessing={isProcessing}
               />
               <ChatInput
                 onSend={handleSendMessage}
-                disabled={createRunsMutation.isPending}
+                disabled={isProcessing}
               />
             </div>
           </div>
