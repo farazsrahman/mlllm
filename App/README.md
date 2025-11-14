@@ -1,6 +1,6 @@
-# Trex 🦖
+# Trex 
 
-**Lightweight experiment assistant for ML researchers**
+**Automate ML Experiments: Automate and Track Your Experiments**
 
 Trex helps you run and manage multiple machine learning training jobs through a conversational interface. Describe what you want to test in plain language, and Trex will propose hyperparameter configurations and execute them for you.
 

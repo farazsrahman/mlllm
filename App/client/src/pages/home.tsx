@@ -112,12 +112,12 @@ export default function Home() {
       <header className="border-b border-border bg-card px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-md bg-primary flex items-center justify-center">
-              <Beaker className="w-6 h-6 text-primary-foreground" />
+            <div className="w-10 h-10 flex items-center justify-center">
+              <img src="/favicon.png" alt="trex" className="w-10 h-10" />
             </div>
             <div>
-              <h1 className="text-xl font-bold" data-testid="text-title">Trex</h1>
-              <p className="text-xs text-muted-foreground">ML Experiment Assistant</p>
+              <h1 className="text-xl font-bold" data-testid="text-title">trex</h1>
+              <p className="text-xs text-muted-foreground">Automate and Track Your Experiments</p>
             </div>
           </div>
           <ThemeToggle />
