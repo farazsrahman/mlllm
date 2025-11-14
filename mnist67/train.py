@@ -22,11 +22,11 @@ class SimpleMLP(nn.Module):
         return self.net(x)
 
 
-def get_6_vs_7_dataset(dataset_size):
+def get_6_vs_7_dataset(dataset_size, train=True, val_split=0.2):
     transform = transforms.ToTensor()
     mnist_full = datasets.MNIST(
         root="./data",
-        train=True,
+        train=train,
         download=True,
         transform=transform,
     )
@@ -41,16 +41,60 @@ def get_6_vs_7_dataset(dataset_size):
         perm = torch.randperm(indices.numel())[:dataset_size]
         indices = indices[perm]
 
-    subset = Subset(mnist_full, indices)
-    return subset
+    # Split into train and val if training
+    if train and val_split > 0:
+        split_idx = int(len(indices) * (1 - val_split))
+        torch.manual_seed(0)
+        perm = torch.randperm(len(indices))
+        indices = indices[perm]
+        train_indices = indices[:split_idx]
+        val_indices = indices[split_idx:]
+        train_subset = Subset(mnist_full, train_indices)
+        val_subset = Subset(mnist_full, val_indices)
+        return train_subset, val_subset
+    else:
+        subset = Subset(mnist_full, indices)
+        return subset
+
+
+def evaluate(model, val_loader, criterion, device):
+    """Evaluate model on validation set."""
+    model.eval()
+    total_loss = 0.0
+    correct = 0
+    total = 0
+    
+    with torch.no_grad():
+        for images, labels in val_loader:
+            images = images.view(images.size(0), -1).to(device)
+            labels = (labels == 7).long().to(device)  # 6 -> 0, 7 -> 1
+            
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            
+            total_loss += loss.item() * images.size(0)
+            preds = outputs.argmax(dim=1)
+            correct += (preds == labels).sum().item()
+            total += labels.size(0)
+    
+    model.train()
+    avg_loss = total_loss / total if total > 0 else 0.0
+    acc = correct / total * 100.0 if total > 0 else 0.0
+    return avg_loss, acc
 
 
 def train(args):
     device = torch.device("cpu")
 
-    dataset = get_6_vs_7_dataset(args.dataset_size)
-    loader = DataLoader(
-        dataset, batch_size=args.batch_size, shuffle=True, num_workers=0
+    # Get train and validation datasets
+    train_dataset, val_dataset = get_6_vs_7_dataset(
+        args.dataset_size, train=True, val_split=args.val_split
+    )
+    train_loader = DataLoader(
+        train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0
+    )
+    val_loader = DataLoader(
+        val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0
     )
 
     model = SimpleMLP(width=args.model_width, depth=args.model_depth).to(device)
@@ -58,12 +102,13 @@ def train(args):
     criterion = nn.CrossEntropyLoss()
 
     model.train()
+    
     for epoch in range(args.epochs):
         total_loss = 0.0
         correct = 0
         total = 0
 
-        for images, labels in loader:
+        for images, labels in train_loader:
             images = images.view(images.size(0), -1).to(device)
             labels = (labels == 7).long().to(device)  # 6 -> 0, 7 -> 1
 
@@ -78,11 +123,15 @@ def train(args):
             correct += (preds == labels).sum().item()
             total += labels.size(0)
 
+        # Evaluate on validation set at end of epoch
+        val_loss, val_acc = evaluate(model, val_loader, criterion, device)
+        
         avg_loss = total_loss / total
         acc = correct / total * 100.0
         print(
             f"Epoch {epoch + 1}/{args.epochs} "
-            f"- loss: {avg_loss:.4f} - acc: {acc:.2f}%"
+            f"- train_loss: {avg_loss:.4f} - train_acc: {acc:.2f}% "
+            f"- val_loss: {val_loss:.4f} - val_acc: {val_acc:.2f}%"
         )
 
 
@@ -101,6 +150,12 @@ def parse_args():
         help="Number of (6/7) training examples to use (<= available).",
     )
     parser.add_argument("--epochs", type=int, default=3)
+    parser.add_argument(
+        "--val_split",
+        type=float,
+        default=0.2,
+        help="Fraction of dataset to use for validation.",
+    )
     return parser.parse_args()
 
 
