@@ -64,17 +64,18 @@ export default function Home() {
         description: `Successfully processed your request and executed ${assistantMessage.runConfigs?.length || 0} training runs.`,
       });
     } catch (error) {
+      const errorContent = error instanceof Error ? error.message : "Sorry, I encountered an error processing your request. Please try again.";
       const errorMessage: ChatMessage = {
         id: `msg-${Date.now() + 1}`,
         role: "assistant",
-        content: "Sorry, I encountered an error processing your request. Please try again.",
+        content: errorContent,
         timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errorMessage]);
       
       toast({
         title: "Error",
-        description: "Failed to process your message. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to process your message. Please try again.",
         variant: "destructive",
       });
     } finally {

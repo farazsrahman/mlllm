@@ -35,7 +35,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         // Create AbortController for timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout (OpenAI API can take time)
 
         const pythonResponse = await fetch("http://localhost:8000/run_experiments", {
           method: "POST",
