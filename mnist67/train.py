@@ -96,7 +96,9 @@ def train(args, seed=None):
             total += labels.size(0)
         
         val_loss, val_acc = evaluate(model, val_loader, criterion, device)
-        print(f"Epoch {epoch + 1}/{args.epochs} - train_loss: {total_loss/total:.4f} - train_acc: {correct/total*100:.2f}% - val_loss: {val_loss:.4f} - val_acc: {val_acc:.2f}%")
+    
+    # Print only the final validation loss
+    print(f"Final Validation Loss: {val_loss:.4f}")
     
     return {
         "train_loss": total_loss / total,

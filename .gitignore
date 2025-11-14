@@ -2,6 +2,7 @@
 */uv.lock
 *wandb/
 *results/
+*gpt_png/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -162,6 +163,7 @@ data/
 checkpoints/
 models/
 outputs/
+results/
 
 # Logs
 *.log
