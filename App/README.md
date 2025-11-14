@@ -1,6 +1,6 @@
-# Trex 🦖
+# Trex 
 
-**Lightweight experiment assistant for ML researchers**
+**Automate ML Experiments: Automate and Track Your Experiments**
 
 Trex helps you run and manage multiple machine learning training jobs through a conversational interface. Describe what you want to test in plain language, and Trex will propose hyperparameter configurations and execute them for you.
 
@@ -76,7 +76,7 @@ npm install
 npm run dev
 ```
 
-Visit `127.0.0.1:5000` to see:
+Visit `127.0.0.1:5000` to see:np
 - Two-column layout (chat left, runs grid right)
 - Conversational experiment interface
 - Run cards with hyperparameters and status
@@ -85,6 +85,29 @@ Visit `127.0.0.1:5000` to see:
 ### Backend (For Implementation)
 
 Backend teammates should implement the Python backend:
+
+#### Running the Backend
+
+Once the backend is implemented, you can run it with:
+
+```bash
+# Navigate to the backend directory
+cd App/backend
+
+# Create and activate a virtual environment (if not already done)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install fastapi "uvicorn[standard]" python-multipart
+
+# Run the FastAPI server
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
+
+The backend will be available at `http://127.0.0.1:8000`. The frontend is configured to connect to this address.
+
+**Note**: The `--reload` flag enables auto-reload during development. Remove it for production.
 
 #### Prerequisites
 

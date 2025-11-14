@@ -7,9 +7,10 @@ import { Sparkles } from "lucide-react";
 interface ChatWindowProps {
   messages: ChatMessage[];
   onRunConfigsAccept?: (configs: any[]) => void;
+  isProcessing?: boolean;
 }
 
-export function ChatWindow({ messages, onRunConfigsAccept }: ChatWindowProps) {
+export function ChatWindow({ messages, onRunConfigsAccept, isProcessing = false }: ChatWindowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
@@ -52,6 +53,16 @@ export function ChatWindow({ messages, onRunConfigsAccept }: ChatWindowProps) {
                 onRunConfigsAccept={onRunConfigsAccept}
               />
             ))}
+            {isProcessing && (
+              <div className="flex gap-3 mb-4">
+                <div className="flex-shrink-0 w-8 h-8 rounded-md bg-primary flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-primary-foreground animate-pulse" />
+                </div>
+                <div className="bg-card border border-card-border rounded-md p-4">
+                  <p className="text-sm text-muted-foreground">Processing your request...</p>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
